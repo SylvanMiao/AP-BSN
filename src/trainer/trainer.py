@@ -40,11 +40,12 @@ class Trainer(BaseTrainer):
             exit()
         # -- [ Test Normal Dataset ] -- #
         else:
-            psnr, ssim = self.test_dataloader_process(  dataloader    = self.test_dataloader['dataset'], 
-                                                        add_con       = 0.  if not 'add_con' in self.test_cfg else self.test_cfg['add_con'], 
+            psnr, ssim = self.test_dataloader_process(  dataloader    = self.test_dataloader['dataset'],
+                                                        add_con       = 0.  if not 'add_con' in self.test_cfg else self.test_cfg['add_con'],
                                                         floor         = False if not 'floor' in self.test_cfg else self.test_cfg['floor'],
-                                                        img_save_path = img_save_path, 
-                                                        img_save      = self.test_cfg['save_image'])
+                                                        img_save_path = img_save_path,
+                                                        img_save      = self.test_cfg['save_image'],
+                                                        norm_factor   = self.test_cfg.get('norm_factor', 1.0))
             # print out result as filename
             if psnr is not None and ssim is not None:
                 with open(os.path.join(self.file_manager.get_dir(img_save_path), '_psnr-%.2f_ssim-%.3f.result'%(psnr, ssim)), 'w') as f:
@@ -62,9 +63,10 @@ class Trainer(BaseTrainer):
         # validation
         psnr, ssim = self.test_dataloader_process(  dataloader    = self.val_dataloader['dataset'],
                                                     add_con       = 0.  if not 'add_con' in self.val_cfg else self.val_cfg['add_con'],
-                                                    floor         = False if not 'floor' in self.val_cfg else self.val_cfg['floor'],                                                    
+                                                    floor         = False if not 'floor' in self.val_cfg else self.val_cfg['floor'],
                                                     img_save_path = img_save_path,
-                                                    img_save      = self.val_cfg['save_image'])
+                                                    img_save      = self.val_cfg['save_image'],
+                                                    norm_factor   = self.val_cfg.get('norm_factor', 1.0))
 
     def _set_module(self):
         module = {}

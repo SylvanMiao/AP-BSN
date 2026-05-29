@@ -10,13 +10,13 @@ from skimage.metrics import peak_signal_noise_ratio, structural_similarity
 def np2tensor(n:np.array):
     '''
     transform numpy array (image) to torch Tensor
-    BGR -> RGB
-    (h,w,c) -> (c,h,w)
+    gray: (h,w) -> (1,h,w)
+    BGR -> RGB: (h,w,c) -> (c,h,w)
     '''
-    # gray
+    # gray: (h,w) -> (1,h,w)
     if len(n.shape) == 2:
-        return torch.from_numpy(np.ascontiguousarray(np.transpose(n, (2,0,1))))
-    # RGB -> BGR
+        return torch.from_numpy(np.ascontiguousarray(n)).unsqueeze(0)
+    # BGR -> RGB: (h,w,c) -> (c,h,w)
     elif len(n.shape) == 3:
         return torch.from_numpy(np.ascontiguousarray(np.transpose(np.flip(n, axis=2), (2,0,1))))
     else:
@@ -25,18 +25,21 @@ def np2tensor(n:np.array):
 def tensor2np(t:torch.Tensor):
     '''
     transform torch Tensor to numpy having opencv image form.
-    RGB -> BGR
-    (c,h,w) -> (h,w,c)
+    gray: (h,w) or (1,h,w) -> (h,w) or (h,w,1)
+    RGB -> BGR: (c,h,w) -> (h,w,c)
     '''
     t = t.cpu().detach()
 
-    # gray
+    # gray (h,w)
     if len(t.shape) == 2:
-        return t.permute(1,2,0).numpy()
-    # RGB -> BGR
+        return t.numpy()
+    # gray (1,h,w) -> (h,w,1), or RGB (3,h,w) -> (h,w,3) with BGR flip
     elif len(t.shape) == 3:
-        return np.flip(t.permute(1,2,0).numpy(), axis=2)
-    # image batch
+        if t.shape[0] == 1:
+            return t.permute(1,2,0).numpy()
+        else:
+            return np.flip(t.permute(1,2,0).numpy(), axis=2)
+    # image batch (b,c,h,w)
     elif len(t.shape) == 4:
         return np.flip(t.permute(0,2,3,1).numpy(), axis=3)
     else:

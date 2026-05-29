@@ -7,23 +7,19 @@ PATCH_SIZE=512
 OVERLAP=0
 THREAD=8
 
-echo "=== Step 1: Prepare patches ==="
-python prep.py -d Confocal -s $PATCH_SIZE -o $OVERLAP -p $THREAD
-
-echo "=== Step 2: Train ==="
+echo "=== Step 1: Train ==="
+mkdir -p ./dataset
 python train.py -c $CONFIG -g $GPU --thread $THREAD
 
-echo "=== Step 3: Test ==="
+echo "=== Step 2: Test ==="
+mkdir -p ckpt
 CKPT=$(ls -t checkpoint/${CONFIG}_*.pth 2>/dev/null | head -1)
 if [ -z "$CKPT" ]; then
-    echo "No checkpoint found, trying ckpt folder..."
-    CKPT=$(ls -t ckpt/${CONFIG}.pth 2>/dev/null | head -1)
-fi
-
-if [ -z "$CKPT" ]; then
-    echo "No checkpoint found. Skipping test."
+    echo "No checkpoint found in checkpoint/. Skipping test."
 else
-    python test.py -c $CONFIG -g $GPU --pretrained $(basename "$CKPT") --thread $THREAD
+    cp "$CKPT" ckpt/
+    CKPT_NAME=$(basename "$CKPT")
+    python test.py -c $CONFIG -g $GPU --pretrained "$CKPT_NAME" --thread $THREAD
 fi
 
 echo "=== Done ==="

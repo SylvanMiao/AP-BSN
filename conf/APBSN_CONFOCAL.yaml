@@ -18,11 +18,11 @@ model_input: [noisy] # e.g.) real_noisy, syn_noisy, clean
 trainer: Trainer
 
 training:
-  dataset: prep_confocal
+  dataset: Confocal
 
   dataset_args:
     add_noise: None # confocal images already contain real noise (shot noise)
-    crop_size: [512, 512]  # must be divisible by pd_a (4)
+    crop_size: [256, 256]  # must be divisible by pd_a (4)
     aug: ['hflip', 'rot']
     n_repeat: 4
 
@@ -47,13 +47,14 @@ training:
   warmup_iter: 200
 
 validation:
-  dataset: prep_confocal
+  dataset: Confocal
 
   dataset_args:
     crop_size: None
     add_noise: None
     n_data: 32
 
+  norm_factor: 65535.0  # uint16 denormalization
   add_con: 0.5
   floor: True
 
@@ -78,6 +79,7 @@ test:
     crop_size: None
     add_noise: None
 
+  norm_factor: 65535.0  # uint16 denormalization
   add_con: 0.0
   floor: False
 

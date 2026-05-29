@@ -19,7 +19,7 @@ from ..loss import Loss
 from ..datahandler import get_dataset_class
 from ..util.file_manager import FileManager
 from ..util.logger import Logger
-from ..util.util import human_format, np2tensor, rot_hflip_img, psnr, ssim, tensor2np, imread_tensor 
+from ..util.util import human_format, rot_hflip_img, psnr, ssim, tensor2np, imread_tensor 
 from ..util.util import pixel_shuffle_down_sampling, pixel_shuffle_up_sampling
 
 
@@ -302,7 +302,7 @@ class BaseTrainer():
         # print progress
         self.logger.print_prog_msg((self.epoch-1, self.iter-1))
 
-    def test_dataloader_process(self, dataloader, add_con=0., floor=False, img_save=True, img_save_path=None, info=True):
+    def test_dataloader_process(self, dataloader, add_con=0., floor=False, img_save=True, img_save_path=None, info=True, norm_factor=1.0):
         '''
         do test or evaluation process for each dataloader
         include following steps:
@@ -316,6 +316,7 @@ class BaseTrainer():
             img_save : whether to save denoised and clean images.
             img_save_path (optional) : path to save denoised images.
             info (optional) : whether to print info.
+            norm_factor : denormalization factor (e.g. 65535.0 for uint16, 1.0 for no change)
         Returns:
             psnr : total PSNR score of dataloaer results or None (if clean image is not available)
             ssim : total SSIM score of dataloder results or None (if clean image is not available)
@@ -337,6 +338,10 @@ class BaseTrainer():
             input_data = [data[arg] for arg in self.cfg['model_input']]
             denoised_image = self.denoiser(*input_data)
 
+            # denormalize (e.g. [0,1] -> [0,65535] for uint16)
+            if norm_factor != 1.0:
+                denoised_image = denoised_image * norm_factor
+
             # add constant and floor (if floor is on)
             denoised_image += add_con
             if floor: denoised_image = torch.floor(denoised_image)
@@ -352,23 +357,31 @@ class BaseTrainer():
 
             # image save
             if img_save:
+                # select save method based on norm_factor
+                save_fn = self.file_manager.save_img_tensor_uint16 if norm_factor != 1.0 else self.file_manager.save_img_tensor
+
                 # to cpu
                 if 'clean' in data:
                     clean_img = data['clean'].squeeze(0).cpu()
+                    if norm_factor != 1.0:
+                        clean_img = clean_img * norm_factor
                 if 'real_noisy' in self.cfg['model_input']: noisy_img = data['real_noisy']
                 elif 'syn_noisy' in self.cfg['model_input']: noisy_img = data['syn_noisy']
                 elif 'noisy' in self.cfg['model_input']: noisy_img = data['noisy']
                 else: noisy_img = None
-                if noisy_img is not None: noisy_img = noisy_img.squeeze(0).cpu()
+                if noisy_img is not None:
+                    noisy_img = noisy_img.squeeze(0).cpu()
+                    if norm_factor != 1.0:
+                        noisy_img = noisy_img * norm_factor
                 denoi_img = denoised_image.squeeze(0).cpu()
 
                 # write psnr value on file name
                 denoi_name = '%04d_DN_%.2f'%(idx, psnr_value) if 'clean' in data else '%04d_DN'%idx
 
                 # imwrite
-                if 'clean' in data:         self.file_manager.save_img_tensor(img_save_path, '%04d_CL'%idx, clean_img)
-                if noisy_img is not None: self.file_manager.save_img_tensor(img_save_path, '%04d_N'%idx, noisy_img)
-                self.file_manager.save_img_tensor(img_save_path, denoi_name, denoi_img)
+                if 'clean' in data:         save_fn(img_save_path, '%04d_CL'%idx, clean_img)
+                if noisy_img is not None: save_fn(img_save_path, '%04d_N'%idx, noisy_img)
+                save_fn(img_save_path, denoi_name, denoi_img)
 
             # procedure log msg
             if info:
@@ -393,9 +406,27 @@ class BaseTrainer():
         '''
         Inference a single image.
         '''
-        # load image
-        noisy = np2tensor(cv2.imread(image_dir))
-        noisy = noisy.unsqueeze(0).float()
+        norm_factor = self.test_cfg.get('norm_factor', 1.0)
+
+        # load image (preserve original bit depth)
+        img = cv2.imread(image_dir, cv2.IMREAD_UNCHANGED)
+        if img is None:
+            raise RuntimeError('failed to load image: %s' % image_dir)
+
+        # handle grayscale or color
+        if img.ndim == 2:
+            img = np.expand_dims(img, axis=0)  # (h,w) -> (1,h,w)
+        elif img.ndim == 3:
+            img = np.transpose(np.flip(img, axis=2), (2, 0, 1))  # BGR->RGB, (h,w,c)->(c,h,w)
+        else:
+            raise RuntimeError('unexpected image ndim: %d' % img.ndim)
+
+        noisy = torch.from_numpy(np.ascontiguousarray(img.astype(np.float32)))
+        noisy = noisy.unsqueeze(0)  # add batch dim
+
+        # normalize (e.g. [0,65535] -> [0,1] for uint16)
+        if norm_factor != 1.0:
+            noisy = noisy / norm_factor
 
         # to device
         if self.cfg['gpu'] != 'None':
@@ -404,14 +435,21 @@ class BaseTrainer():
         # forward
         denoised = self.denoiser(noisy)
 
+        # denormalize (e.g. [0,1] -> [0,65535] for uint16)
+        if norm_factor != 1.0:
+            denoised = denoised * norm_factor
+
         # post-process
         denoised += self.test_cfg['add_con']
         if self.test_cfg['floor']: denoised = torch.floor(denoised)
 
         # save image
         denoised = tensor2np(denoised)
+        if norm_factor != 1.0:
+            # convert float32 [0,65535] to uint16 for proper PNG saving
+            denoised = np.clip(np.round(denoised), 0, 65535).astype(np.uint16)
         denoised = denoised.squeeze(0)
-        
+
         name = image_dir.split('/')[-1].split('.')[0]
         cv2.imwrite(os.path.join(save_dir, name+'_DN.png'), denoised)
 

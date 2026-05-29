@@ -7,9 +7,10 @@ class ConfigParser:
         with open(cfg_file) as f:
             self.config = yaml.load(f, Loader=yaml.FullLoader)
 
-        # load argument
+        # load argument (only override yaml if explicitly given, not default None)
         for arg in args.__dict__:
-            self.config[arg] = args.__dict__[arg]
+            if args.__dict__[arg] is not None:
+                self.config[arg] = args.__dict__[arg]
 
         # string None handing
         self.convert_None(self.config)

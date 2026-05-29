@@ -34,6 +34,12 @@ class FileManager:
     def save_img_tensor(self, dir_name:str, file_name:str, img:torch.Tensor, ext='png'):
         self.save_img_numpy(dir_name, file_name, tensor2np(img), ext)
 
+    def save_img_tensor_uint16(self, dir_name:str, file_name:str, img:torch.Tensor, ext='png'):
+        """Save a float32 tensor as uint16 PNG, clamping to [0, 65535]."""
+        img = tensor2np(img)
+        img = np.clip(np.round(img), 0, 65535).astype(np.uint16)
+        self.save_img_numpy(dir_name, file_name, img, ext)
+
     def save_img_numpy(self, dir_name:str, file_name:str, img:np.array, ext='png'):
         file_dir_name = os.path.join(self.get_dir(dir_name), '%s.%s'%(file_name, ext))
         if np.shape(img)[2] == 1:

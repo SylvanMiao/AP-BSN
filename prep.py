@@ -25,6 +25,7 @@ def main():
     data_sample = dataset.__getitem__(0)
     flag_c, flag_n = 'clean' in data_sample, 'real_noisy' in data_sample
 
+    # 多进程封装
     pool = mp.Pool(args.process)
     mp_args = [[data_idx, args.patch_size, args.overlap, flag_c, False, flag_n] for data_idx in range(dataset.__len__())]
 

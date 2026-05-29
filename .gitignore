@@ -18,5 +18,6 @@ code_test/*
 ckpt/*
 !ckpt/.gitkeep
 
-# ignore training script file
-*.sh
+# # ignore training script file
+# *.sh
+

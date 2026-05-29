@@ -42,12 +42,15 @@ class Confocal(DenoiseDataSet):
         assert img.ndim == 2, \
             "unexpected image shape %s for %s" % (img.shape, img_path)
 
-        # uint16: value range [0, 65535], normalize to [0, 1]
+        # auto-detect bit depth: uint8 (max<=255) or uint16 (max>255)
+        norm_factor = 255.0 if img.max() <= 255 else 65535.0
+
+        # normalize to [0, 1]
         img = np.expand_dims(img.astype(np.float32), axis=0)
-        img = img / 65535.0
+        img = img / norm_factor
         noisy_img = torch.from_numpy(np.ascontiguousarray(img))
 
-        return {'real_noisy': noisy_img}
+        return {'real_noisy': noisy_img, 'norm_factor': norm_factor}
 
 
 @regist_dataset
@@ -75,9 +78,12 @@ class prep_confocal(DenoiseDataSet):
         img = cv2.imread(img_path, cv2.IMREAD_UNCHANGED)
         assert img is not None, "failure on loading image - %s"%img_path
 
-        # uint16: value range [0, 65535], normalize to [0, 1]
+        # auto-detect bit depth: uint8 (max<=255) or uint16 (max>255)
+        norm_factor = 255.0 if img.max() <= 255 else 65535.0
+
+        # normalize to [0, 1]
         img = np.expand_dims(img.astype(np.float32), axis=0)
-        img = img / 65535.0
+        img = img / norm_factor
         noisy_img = torch.from_numpy(np.ascontiguousarray(img))
 
-        return {'real_noisy': noisy_img}
+        return {'real_noisy': noisy_img, 'norm_factor': norm_factor}

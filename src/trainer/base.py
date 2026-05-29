@@ -332,15 +332,19 @@ class BaseTrainer():
             # to device
             if self.cfg['gpu'] != 'None':
                 for key in data:
-                    data[key] = data[key].cuda()
+                    if isinstance(data[key], torch.Tensor):
+                        data[key] = data[key].cuda()
+
+            # per-image normalization factor (from dataset _load_data), force to Python float
+            img_norm_factor = float(data.get('norm_factor', norm_factor))
 
             # forward
             input_data = [data[arg] for arg in self.cfg['model_input']]
             denoised_image = self.denoiser(*input_data)
 
-            # denormalize (e.g. [0,1] -> [0,65535] for uint16)
-            if norm_factor != 1.0:
-                denoised_image = denoised_image * norm_factor
+            # denormalize (e.g. [0,1] -> original range)
+            if img_norm_factor != 1.0:
+                denoised_image = denoised_image * img_norm_factor
 
             # add constant and floor (if floor is on)
             denoised_image += add_con
@@ -358,21 +362,21 @@ class BaseTrainer():
             # image save
             if img_save:
                 # select save method based on norm_factor
-                save_fn = self.file_manager.save_img_tensor_uint16 if norm_factor != 1.0 else self.file_manager.save_img_tensor
+                save_fn = self.file_manager.save_img_tensor_denorm if img_norm_factor != 1.0 else self.file_manager.save_img_tensor
 
                 # to cpu
                 if 'clean' in data:
                     clean_img = data['clean'].squeeze(0).cpu()
-                    if norm_factor != 1.0:
-                        clean_img = clean_img * norm_factor
+                    if img_norm_factor != 1.0:
+                        clean_img = clean_img * img_norm_factor
                 if 'real_noisy' in self.cfg['model_input']: noisy_img = data['real_noisy']
                 elif 'syn_noisy' in self.cfg['model_input']: noisy_img = data['syn_noisy']
                 elif 'noisy' in self.cfg['model_input']: noisy_img = data['noisy']
                 else: noisy_img = None
                 if noisy_img is not None:
                     noisy_img = noisy_img.squeeze(0).cpu()
-                    if norm_factor != 1.0:
-                        noisy_img = noisy_img * norm_factor
+                    if img_norm_factor != 1.0:
+                        noisy_img = noisy_img * img_norm_factor
                 denoi_img = denoised_image.squeeze(0).cpu()
 
                 # write psnr value on file name
@@ -406,12 +410,13 @@ class BaseTrainer():
         '''
         Inference a single image.
         '''
-        norm_factor = self.test_cfg.get('norm_factor', 1.0)
-
         # load image (preserve original bit depth)
         img = cv2.imread(image_dir, cv2.IMREAD_UNCHANGED)
         if img is None:
             raise RuntimeError('failed to load image: %s' % image_dir)
+
+        # auto-detect bit depth from pixel values
+        norm_factor = 255.0 if img.max() <= 255 else 65535.0
 
         # handle grayscale or color
         if img.ndim == 2:
@@ -424,7 +429,7 @@ class BaseTrainer():
         noisy = torch.from_numpy(np.ascontiguousarray(img.astype(np.float32)))
         noisy = noisy.unsqueeze(0)  # add batch dim
 
-        # normalize (e.g. [0,65535] -> [0,1] for uint16)
+        # normalize (e.g. [0,65535] -> [0,1] for uint16, [0,255] -> [0,1] for uint8)
         if norm_factor != 1.0:
             noisy = noisy / norm_factor
 
@@ -446,8 +451,12 @@ class BaseTrainer():
         # save image
         denoised = tensor2np(denoised)
         if norm_factor != 1.0:
-            # convert float32 [0,65535] to uint16 for proper PNG saving
-            denoised = np.clip(np.round(denoised), 0, 65535).astype(np.uint16)
+            # auto-detect: uint8 (max<=255) -> save as uint8, uint16 -> save as uint16
+            img_max = float(np.nanmax(denoised)) if denoised.size > 0 else 0.0
+            if img_max <= 255.0:
+                denoised = np.clip(np.round(denoised), 0, 255).astype(np.uint8)
+            else:
+                denoised = np.clip(np.round(denoised), 0, 65535).astype(np.uint16)
         denoised = denoised.squeeze(0)
 
         name = image_dir.split('/')[-1].split('.')[0]

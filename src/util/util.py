@@ -155,11 +155,13 @@ def psnr(img1, img2):
     if isinstance(img2, torch.Tensor):
         img2 = tensor2np(img2)
 
-    # numpy value cliping & chnage type to uint8
-    img1 = np.clip(img1, 0, 255)
-    img2 = np.clip(img2, 0, 255)
+    data_range = 1.0 if max(float(np.max(img1)), float(np.max(img2))) <= 1.0 else (65535.0 if max(float(np.max(img1)), float(np.max(img2))) > 255.0 else 255.0)
 
-    return peak_signal_noise_ratio(img1, img2, data_range=255)
+    # numpy value cliping & chnage type to uint8
+    img1 = np.clip(img1, 0, data_range)
+    img2 = np.clip(img2, 0, data_range)
+
+    return peak_signal_noise_ratio(img1, img2, data_range=data_range)
 
 def ssim(img1, img2):
     '''
@@ -177,11 +179,13 @@ def ssim(img1, img2):
     if isinstance(img2, torch.Tensor):
         img2 = tensor2np(img2)
 
-    # numpy value cliping
-    img2 = np.clip(img2, 0, 255)
-    img1 = np.clip(img1, 0, 255)
+    data_range = 1.0 if max(float(np.max(img1)), float(np.max(img2))) <= 1.0 else (65535.0 if max(float(np.max(img1)), float(np.max(img2))) > 255.0 else 255.0)
 
-    return structural_similarity(img1, img2, multichannel=True, data_range=255)
+    # numpy value cliping
+    img2 = np.clip(img2, 0, data_range)
+    img1 = np.clip(img1, 0, data_range)
+
+    return structural_similarity(img1, img2, multichannel=True, data_range=data_range)
 
 def get_gaussian_2d_filter(window_size, sigma, channel=1, device=torch.device('cpu')):
     '''

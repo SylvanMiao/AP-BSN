@@ -29,7 +29,7 @@ class DenoiseDataSet(Dataset):
         '''
         self.dataset_dir = './dataset'
         if not os.path.isdir(self.dataset_dir):
-            raise Exception('dataset directory is not exist')
+            print("[WARNING] dataset directory './dataset' does not exist. Some dataset classes (SIDD, DND, prep_confocal) require it.")
         
         # parse additive noise argument
         self.add_noise_type, self.add_noise_opt, self.add_noise_clamp = self._parse_add_noise(add_noise)

@@ -18,6 +18,9 @@ class ConfigParser:
     def __getitem__(self, name):
         return self.config[name]
 
+    def get(self, name, default=None):
+        return self.config.get(name, default)
+
     def convert_None(self, d):
         for key in d:
             if d[key] == 'None':

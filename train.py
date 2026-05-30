@@ -25,8 +25,8 @@ def main():
     cfg = ConfigParser(args)
 
     # device setting
-    if cfg['gpu'] is not None:
-        os.environ['CUDA_VISIBLE_DEVICES'] = cfg['gpu']
+    if cfg.get('gpu') is not None:
+        os.environ['CUDA_VISIBLE_DEVICES'] = cfg.get('gpu')
 
     # intialize trainer
     trainer = get_trainer_class(cfg['trainer'])(cfg)

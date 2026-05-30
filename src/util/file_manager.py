@@ -34,11 +34,10 @@ class FileManager:
     def save_img_tensor(self, dir_name:str, file_name:str, img:torch.Tensor, ext='png'):
         self.save_img_numpy(dir_name, file_name, tensor2np(img), ext)
 
-    def save_img_tensor_denorm(self, dir_name:str, file_name:str, img:torch.Tensor, ext='png'):
-        """Save a denormalized float32 tensor: auto-detect uint8 vs uint16 range for proper viewing."""
+    def save_img_tensor_denorm(self, dir_name:str, file_name:str, img:torch.Tensor, norm_factor:float=1.0, ext='png'):
+        """Save a denormalized float32 tensor: use norm_factor to determine uint8 vs uint16 instead of guessing from pixel values."""
         img = tensor2np(img)
-        img_max = float(np.nanmax(img)) if img.size > 0 else 0.0
-        if img_max <= 255.0:
+        if norm_factor <= 255.0:
             # 8-bit range -> save as uint8
             img = np.clip(np.round(img), 0, 255).astype(np.uint8)
         else:

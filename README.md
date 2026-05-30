@@ -1,179 +1,167 @@
-# AP-BSN: Self-Supervised Denoising for Real-World Images via Asymmetric PD and Blind-Spot Network
+# AP-BSN: Self-Supervised Denoising for Confocal Microscopy
 
-This is an official PyTorch implementation of "AP-BSN: Self-Supervised Denoising for Real-World Images via Asymmetric PD and Blind-Spot Network" in CVPR 2022.
-
-![main_fig](./figs/main.png)
-
-
-## Abstract
-_Blind-spot network (BSN) and its variants have made significant advances in self-supervised denoising. Nevertheless, they are still bound to synthetic noisy inputs due to less practical assumptions like pixel-wise independent noise. Hence, it is challenging to deal with spatially correlated real-world noise using self-supervised BSN. Recently, pixel-shuffle downsampling (PD) has been proposed to remove the spatial correlation of real-world noise. However, it is not trivial to integrate PD and BSN directly, which prevents the fully self-supervised denoising model on real-world images. We propose an Asymmetric PD (AP) to address this issue, which introduces different PD stride factors for training and inference. We systematically demonstrate that the proposed AP can resolve inherent trade-offs caused by specific PD stride factors and make BSN applicable to practical scenarios. To this end, we develop AP-BSN, a state-of-the-art self-supervised denoising method for real-world sRGB images. We further propose random-replacing refinement, which significantly improves the performance of our AP-BSN without any additional parameters. Extensive studies demonstrate that our method outperforms the other self-supervised and even unpaired denoising methods by a large margin, without using any additional knowledge, e.g., noise level, regarding the underlying unknown noise._
-
-[[Paper](https://arxiv.org/abs/2203.11799)]
+基于 [AP-BSN (CVPR 2022)](https://arxiv.org/abs/2203.11799) 的显微图像自监督去噪。原始方法针对 sRGB 自然图像设计，本项目将其适配到**Confocal图像**（单通道、混合 8/16-bit、灰度图）。
 
 ---
 
-## Setup
+## 环境
 
-### Requirements
-
-Our experiments are done with:
-
-- Python 3.9.5
-- PyTorch 1.9.0
-- numpy 1.21.0
-- opencv 4.5.2
-- scikit-image 0.18.1
-
-### Directory
-
-Follow below descriptions to build code directory.
-
-```
-AP-BSN
-├─ ckpt
-├─ conf
-├─ dataset
-│  ├─ DND
-│  ├─ SIDD
-│  ├─ NIND
-│  ├─ prep
-├─ figs
-├─ output
-├─ src
-```
-
-- Make `dataset` folder which contains various dataset.
-  - place [DND](https://noise.visinf.tu-darmstadt.de/), [SIDD](https://www.eecs.yorku.ca/~kamel/sidd/), [NIND](https://commons.wikimedia.org/wiki/Natural_Image_Noise_Dataset) datasets at here.
-  - `prep` folder contains prepared data for efficient training. (cropped patches with overlapping)
-  - how to prepare existing or custom dataset is available at [here](./src/datahandler/prepare_dataset.md).
-- Make `output` folder which contains experimental results including checkpoint, val/test images and training logs.
-- Recommend to use __soft link__ due to folders would take large storage capacity.
-
-### Pre-trained Models
-
-You can download pretrained checkpoints of our method. Place these files into `ckpt` folder.
-
-| Method |      Dataset   |      Config file     | Pre-trained |
-| :----: | :------------: | :------------------: | :---------: |
-| AP-BSN |       DND      |     APBSN_DND.yaml   | [APBSN_DND.pth](https://drive.google.com/file/d/1tixIn1qd9J2bQf4UZAXOq8AgLJ_FKohO/view?usp=sharing) |
-| AP-BSN |      SIDD      |    APBSN_SIDD.yaml   | [APBSN_SIDD.pth](https://drive.google.com/file/d/1dGOtPSet0WZZ5QzSPunXtEByk8lw_fCO/view?usp=sharing) |
-| AP-BSN | SIDD_benchmark | APBSN_SIDDbench.yaml | [APBSN_SIDDbench.pth](https://drive.google.com/file/d/15U229KMfD_hquB29MwgRfFO1U4l-U3_7/view?usp=sharing) |
-| AP-BSN |      NIND      |    APBSN_NIND.yaml   | [APBSN_NIND.pth](https://drive.google.com/file/d/1O0CKMc1C44__Ae80W0DsfOUMoELX4UHA/view?usp=sharing) |
-
-### SIDD Result images (val/benchmark)
-
-Here are the result images of the SIDD validation/benchmark dataset in the main table.
-
-[[validation_images](https://drive.google.com/file/d/1MsCZ6Vy67ON5kOmql7JnjlAnZIzNyIJz/view?usp=sharing)]
-[[benchmark_images](https://drive.google.com/file/d/17g7IqIy3GFjERa61A4U1omKGKYrL2PFu/view?usp=sharing)]
-
-
-## Quick test
-
-To test on a single noisy image with pre-trained AP-BSN in gpu:0.
-
-```
-python test.py -c APBSN_SIDD -g 0 --pretrained APBSN_SIDD.pth --test_img ./YOUR_IMAGE_NAME_HERE.png
-```
+- Python ≥ 3.9
+- PyTorch ≥ 1.9
+- numpy, opencv-python, scikit-image, scipy, pyyaml, tensorboard
 
 ---
 
-## Training & Test
+## Hands-on
 
-### Training
+### 1. 准备数据
 
-```
-usage: python train.py [-c CONFIG_FILE_NAME] [-g GPU_NUM] 
-                       [-s SESSION_NAME] [-r] [--thread THREAD_NUM]
-
-Train model.
-
-Arguments:      
-  -c CONFIG_FILE_NAME              Configuration file name. (only file name in ./conf, w/o '.yaml') 
-  -g GPU_NUM                       GPU ID(number). Only support single gpu setting.
-  -s SESSION_NAME      (optional)  Name of training session (default: configuration file name)
-  -r                   (optional)  Flag for resume training. (On: resume, Off: starts from scratch)
-  --thread THREAD_NUM  (optional)  Number of thread for dataloader. (default: 4)
-```
-
-You can control detail experimental configurations (e.g. training loss, epoch, batch_size, etc.) in each of config file.
-
-Examples:
+将共聚焦图像（PNG/TIF，单通道灰度）放入目录，例如：
 
 ```
-# Train AP-BSN for the SIDD dataset using gpu:0
-python train.py -c APBSN_SIDD -g 0
-
-# Train AP-BSN for the DND dataset with session name "MyAPBSN_DND" using gpu:0 and keep training (resume)
-python train.py -c APBSN_DND -g 0 -s MyAPBSN_DND -r
+dataset/confocal/
+├─ img_001.png      # 16-bit
+├─ img_002.png      # 8-bit
+├─ img_003.tif      # 16-bit
+└─ ...
 ```
 
-### Test
+> 支持同一数据集中混合 8-bit / 16-bit，代码会自动逐张检测位深并归一化。
 
-```
-usage: python test.py [-c CONFIG_FILE_NAME] [-g GPU_NUM] 
-(model select)        [-e CKPT_EPOCH] [--pretrained MODEL] 
-                      [-s SESSION_NAME] [--thread THREAD_NUM] [--test_img IMAGE] [--test_dir DIR]
+修改 `conf/APBSN_CONFOCAL.yaml` 中数据集的路径：
 
-Test dataset or a image using pre-trained model.
-
-Arguments:      
-  -c CONFIG_FILE_NAME              Configuration file name. (only file name in ./conf, w/o '.yaml') 
-  -g GPU_NUM                       GPU ID(number). Only support single gpu setting.
-  -e CKPT_EPOCH                    Epoch number of checkpoint. (disabled when --pretrained is on)
-  --pretrained MODEL   (optional)  Explicit directory of pre-trained model in ckpt folder.
-  -s SESSION_NAME      (optional)  Name of training session (default: configuration file name)
-  --thread THREAD_NUM  (optional)  Number of thread for dataloader. (default: 4)
-  --test_img IMAGE     (optional)  Image directory to denoise a single image. (default: test dataset in config file)
-  --test_dir DIR       (optional)  Directory of images to denoise.
+```yaml
+# src/datahandler/CONFOCAL.py 中修改 _scan() 里的 dataset_path
 ```
 
-You can also control detail test configurations (e.g. on/off R^3, test dataset, etc.) in each of config file.
+### 2. 训练
 
-Examples:
+```bash
+# 直接训练
+python train.py -c APBSN_CONFOCAL -g 0 --thread 8
 
+# 或使用脚本
+bash train_confocal.sh
 ```
-# Test SIDD dataset for 20 epoch model in gpu:0
-python test.py -c APBSN_SIDD -g 0 -e 20
 
-# Test SIDD dataset for pre-trained model (./ckpt/APBSN_SIDD.pth) in gpu:0
-python test.py -c APBSN_SIDD -g 0 --pretrained APBSN_SIDD.pth
+检查点保存在 `output/APBSN_CONFOCAL/checkpoint/`，每个 epoch 保存一次。
 
-# Test a image (./sample_image.png) with pre-trained SIDD AP-BSN in gpu:0 (image will be saved at root directory of project)
-python test.py -c APBSN_SIDD -g 0 --pretrained APBSN_SIDD.pth --test_img ./sample_image.png
+### 3. 推理
 
-# Test images in a folder (./test/*)
-python test.py -c APBSN_SIDD -g 0 --pretrained APBSN_SIDD.pth --test_dir ./test
+```bash
+# 单张图
+python test.py -c APBSN_CONFOCAL -g 0 --pretrained APBSN_CONFOCAL.pth --test_img ./test.png
+
+# 整个文件夹
+python test.py -c APBSN_CONFOCAL -g 0 --pretrained APBSN_CONFOCAL.pth --test_dir ./test_origin/
+
+# 用训练中的检查点，不用预训练权重
+python test.py -c APBSN_CONFOCAL -g 0 -e 50 --test_dir ./test_origin/
 ```
+
+| 参数 | 说明 |
+|------|------|
+| `--test_img PATH` | 单张图像，输出 `<原名>_DN.png` |
+| `--test_dir PATH` | 目录，输出到 `<dir>/results/` |
+| `--self_en` | 几何自集成（8次旋转/翻转平均，更高质量） |
 
 ---
 
-## Results
+## 配置说明
 
-### Quantitative results
+编辑 `conf/APBSN_CONFOCAL.yaml`：
 
-Here is reported results of AP-BSN. Please refer our paper for more detailed results.
+```yaml
+model:
+  kwargs:
+    pd_a: 5           # 训练PD因子（须能整除 crop_size）
+    pd_b: 2           # 推理PD因子
+    bsn_base_ch: 128  # 主干网络通道数
+    bsn_num_module: 9 # 主干网络深度
 
-![results](./figs/results.png)
+training:
+  dataset_args:
+    crop_size: [255, 255]  # 必须被 pd_a 整除
+    n_repeat: 8
+  batch_size: 8
+  max_epoch: 100
+  init_lr: 1e-4
+  scheduler:
+    type: step
+    step:
+      step_size: 8    # 每 N 个epoch衰减LR
+      gamma: 0.1      # 衰减倍率
+  loss: 1*self_L1     
 
-### Qualitative results
+validation:
+  val: True
+  save_image: True
+  start_epoch: 1
+  interval_epoch: 1   # 每N个epoch验证一次
 
-![visual](./figs/visual_results.png)
+test:
+  save_image: True
+```
 
-## Reference
+### 超参数调整建议
+
+| 参数 | 作用 | 建议值 |
+|------|------|--------|
+| `init_lr` | 初始学习率 | `5e-5` ~ `1e-4` |
+| `step_size` | LR 衰减频率 | `8` |
+| `gamma` | LR 衰减倍率 | `0.1` |
+| `pd_a` | 盲点约束强度 | `5` |
+| `bsn_base_ch` | 模型宽度 | `256` |
+| `bsn_num_module` | 模型深度 | `12` |
+| `crop_size` | 训练patch大小 | `[128, 128]` 或 `[255, 255]` |
+
+---
+
+## 原始数据集
+
+原始论文还支持 SIDD、DND、NIND 等 sRGB 数据集，配置文件在 `conf/APBSN_SIDD.yaml` 等，预训练权重见原仓库。本项目主要关注共聚焦显微图像。
+
+---
+
+## 改进记录
+
+基于原版 AP-BSN 做的改动：
+
+### 混合位深支持
+
+原版假定所有图像同一位深。改动后 `_load_data()` 逐张检测 `norm_factor`（8-bit=255, 16-bit=65535），归一化和反归一化均按单张图像独立处理。8-bit 和 16-bit 图像可以混在同一个数据集里。
+
+> `src/datahandler/CONFOCAL.py`, `src/trainer/base.py`
+
+### 修复验证/推理时图像全黑
+
+原版 `save_img_tensor_denorm()` 靠像素最大值 `≤ 255` 来判断存 uint8 还是 uint16。训练后期模型输出略微超出 `[0, 1]` 时，8-bit 图经过反归一化 + add_con 后 max 可能略超 255，被误判为 uint16，导致在 0-65535 范围下几乎全黑。
+
+改为传入真实的 `norm_factor` 来确定位深。
+
+> `src/util/file_manager.py`, `src/trainer/base.py`
+
+### 修复可选参数 KeyError
+
+`--test_img`、`--test_dir`、`--pretrained`、`-g` 未传时不在 config 字典中，原版 `self.cfg['test_img']` 直接抛 KeyError。给 `ConfigParser` 增加 `get()` 方法兜底。
+
+> `src/util/config_parse.py`, `src/trainer/trainer.py`, `src/trainer/base.py`, `test.py`, `train.py`
+
+### 单图/目录推理不依赖数据集路径
+
+`_before_test()` 增加 `dataset_load` 参数，单图和目录推理时跳过数据集初始化，不需要存在数据集目录。
+
+> `src/trainer/trainer.py`, `src/trainer/base.py`
+
+---
+
+## citation
 
 ```
 @inproceedings{lee2022apbsn,
-  title={AP-BSN: Self-Supervised Denoising for Real-World Images via Asymmetric PD and Blind-Spot Network}, 
+  title={AP-BSN: Self-Supervised Denoising for Real-World Images via Asymmetric PD and Blind-Spot Network},
   author={Lee, Wooseok and Son, Sanghyun and Lee, Kyoung Mu},
   booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
   year={2022}
 }
 ```
-
----
-
-### Update log
-
-- (22.04.15) fixed a bug of single image test without dataset, and update test code for entire image folder.
-- (22.05.13) upload result images of the SIDD validation/benchmark dataset.
